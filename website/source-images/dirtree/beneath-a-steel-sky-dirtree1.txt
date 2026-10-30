@@ -1,8 +1,0 @@
-DOS Games
-  Beneath a Steel Sky
-    drives
-      c
-    drives
-      d
-        Beneath a Steel Sky (1995)(Virgin).iso
-    dosbox.conf

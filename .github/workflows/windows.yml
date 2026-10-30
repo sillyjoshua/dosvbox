@@ -15,6 +15,14 @@ on:
       - 'licenses/**'
       - 'website/**'
 
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag to attach the Windows installer to
+        required: true
+        default: v0.1.0
+        type: string
+
   pull_request:
     paths-ignore:
       - '.clang-format'
@@ -272,7 +280,7 @@ jobs:
     needs:   merge_artifacts
     runs-on: windows-2025-vs2026
     permissions:
-      contents: read
+      contents: write
       statuses: write
     strategy:
       matrix:
@@ -345,7 +353,7 @@ jobs:
         run: |
           move out\*-setup.exe .
 
-      - name: Upload Windows installer
+      - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PACKAGE_DIR }}-setup
@@ -353,6 +361,18 @@ jobs:
             ${{ env.PACKAGE_DIR }}-setup.exe
             release-notes.html
           overwrite: true
+
+      - name: Attach installer to existing GitHub release
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $installer = Get-ChildItem -File -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'The Windows setup executable was not produced.' }
+          gh release view "$env:RELEASE_TAG" --repo "${{ github.repository }}" | Out-Null
+          gh release upload "$env:RELEASE_TAG" $installer.FullName --repo "${{ github.repository }}" --clobber
 
       # Reports this job's own pass/fail as a separate GitHub status, since
       # the workflow as a whole also includes the debugger build above,

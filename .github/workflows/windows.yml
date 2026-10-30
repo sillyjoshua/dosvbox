@@ -38,9 +38,9 @@ concurrency:
 
 jobs:
   generate_release_notes:
-    name:    Generate release notes
+    name: Generate release notes
     runs-on: ubuntu-slim
-    if:      github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -65,8 +65,8 @@ jobs:
           retention-days: 1
 
   build_windows_release:
-    name:  Release ${{ matrix.conf.debugger && 'w/ debugger' || '' }} (${{ matrix.conf.arch }})
-    if:    github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    name: Release ${{ matrix.conf.debugger && 'w/ debugger' || '' }} (${{ matrix.conf.arch }})
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     needs: generate_release_notes
     runs-on: windows-2025-vs2026
     strategy:
@@ -91,8 +91,8 @@ jobs:
       - name: Set common vars
         uses: ./.github/actions/set-common-vars
 
-      - name:  Set variables
-        id:    set_vars
+      - name: Set variables
+        id: set_vars
         shell: bash
         run: |
           set -x
@@ -109,9 +109,9 @@ jobs:
       - name: Set up CMake
         uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
 
-      - name:  Log environment
+      - name: Log environment
         shell: pwsh
-        run:   .\scripts\ci\log-env.ps1
+        run: .\scripts\ci\log-env.ps1
 
       # Retried because the docs build (OPT_DOCUMENTATION=ON) downloads
       # external assets via the MkDocs Material privacy plugin; a transient
@@ -119,7 +119,7 @@ jobs:
       # the entire step keeps the change minimal; the cmake build is
       # incremental, so a docs-flake retry skips already-compiled artifacts.
       - name: Build release
-        if:   ${{ !matrix.conf.debugger }}
+        if: ${{ !matrix.conf.debugger }}
         uses: ./.github/actions/retry
         with:
           cmd: |
@@ -127,15 +127,15 @@ jobs:
             cmake -DOPT_DOCUMENTATION=ON --preset release-windows
             cmake --build --preset release-windows 2>&1 | tee build.log
 
-      - name:  Run tests
-        if:    ${{ !matrix.conf.debugger }}
+      - name: Run tests
+        if: ${{ !matrix.conf.debugger }}
         shell: pwsh
         run: |
           ctest -j 4 --preset release-windows 2>&1 | Tee-Object -FilePath tests.log
 
       # See the comment on "Build release" above re: why this is retried.
       - name: Build release with debugger
-        if:   ${{ matrix.conf.debugger }}
+        if: ${{ matrix.conf.debugger }}
         uses: ./.github/actions/retry
         with:
           cmd: |
@@ -146,10 +146,10 @@ jobs:
       - name: Summarize warnings
         env:
           MAX_WARNINGS: ${{ matrix.conf.max_warnings }}
-        run:  python3 ./scripts/ci/count-warnings.py -lf --msclang build.log
+        run: python3 ./scripts/ci/count-warnings.py -lf --msclang build.log
 
-      - name:  Package standard build
-        if:    ${{ !matrix.conf.debugger }}
+      - name: Package standard build
+        if: ${{ !matrix.conf.debugger }}
         shell: bash
         run: |
           set -x
@@ -173,9 +173,8 @@ jobs:
           # Package
           ./scripts/packaging/create-package.sh -p windows "$BUILD_DIR" "$PACKAGE_DIR"
 
-
-      - name:  Inject external vcpkg dependencies
-        if:    ${{ !matrix.conf.debugger }}
+      - name: Inject external vcpkg dependencies
+        if: ${{ !matrix.conf.debugger }}
         shell: bash
         run: |
           set -x
@@ -188,9 +187,8 @@ jobs:
 
           cp vcpkg-deps/release/* "$PACKAGE_DIR"
 
-
-      - name:  Inject Nuked-SC55-CLAP plugin
-        if:    ${{ !matrix.conf.debugger }}
+      - name: Inject Nuked-SC55-CLAP plugin
+        if: ${{ !matrix.conf.debugger }}
         shell: bash
         run: |
           set -x
@@ -206,22 +204,22 @@ jobs:
           cp nuked-sc55-clap/* $PLUGINS_DIR
 
       - name: Download release notes HTML
-        if:   ${{ !matrix.conf.debugger }}
+        if: ${{ !matrix.conf.debugger }}
         uses: actions/download-artifact@v8
         with:
           name: release-notes-html
           path: ${{ env.PACKAGE_DIR }}
 
       - name: Upload package
-        if:   ${{ !matrix.conf.debugger }}
+        if: ${{ !matrix.conf.debugger }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PACKAGE_DIR }}-without-debugger
           path: ${{ env.PACKAGE_DIR }}
           overwrite: true
 
-      - name:  Package debugger build
-        if:    ${{ matrix.conf.debugger }}
+      - name: Package debugger build
+        if: ${{ matrix.conf.debugger }}
         shell: bash
         run: |
           set -x
@@ -231,25 +229,23 @@ jobs:
           cp "$BUILD_DIR/$DOSBOX_DEBUGGER_EXE" "$PACKAGE_DIR/$DOSBOX_DEBUGGER_EXE"
 
       - name: Upload debugger artifact
-        if:   ${{ matrix.conf.debugger }}
+        if: ${{ matrix.conf.debugger }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PACKAGE_DIR }}-with-debugger
           path: ${{ env.PACKAGE_DIR }}/${{ env.DOSBOX_DEBUGGER_EXE }}
           overwrite: true
 
-      - name:  Report repo cache usage
-        if:    always()
+      - name: Report repo cache usage
+        if: always()
         shell: bash
-        run:   gh cache list --limit 50 --sort size_in_bytes --order desc
+        run: gh cache list --limit 50 --sort size_in_bytes --order desc
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
   merge_artifacts:
     name: Merge release & debugger artifacts (${{ matrix.arch }} )
     needs: build_windows_release
-
     runs-on: ubuntu-slim
     strategy:
       matrix:
@@ -270,14 +266,13 @@ jobs:
       - name: Merge artifacts (${{ matrix.arch }} )
         uses: actions/upload-artifact/merge@v7
         with:
-          name:    dosbox-staging-windows-${{ matrix.arch }}-${{ env.DOSBOX_VERSION_AND_HASH }}
+          name: dosbox-staging-windows-${{ matrix.arch }}-${{ env.DOSBOX_VERSION_AND_HASH }}
           pattern: dosbox-staging-windows-${{ matrix.arch }}-*
           delete-merged: 'true'
 
-
   build_installer:
-    name:    Build installer (${{ matrix.arch }} )
-    needs:   merge_artifacts
+    name: Build installer (${{ matrix.arch }} )
+    needs: merge_artifacts
     runs-on: windows-2025-vs2026
     permissions:
       contents: write
@@ -296,8 +291,8 @@ jobs:
       - name: Set common vars
         uses: ./.github/actions/set-common-vars
 
-      - name:  Set variables
-        id:    set_vars
+      - name: Set variables
+        id: set_vars
         shell: bash
         run: |
           set -x
@@ -337,11 +332,29 @@ jobs:
           mv $PACKAGE_DIR/*          out/program
           mv out/program/dosbox*.exe out
 
-      - name: Build Windows installer
+      - name: Install or locate Inno Setup
         shell: pwsh
         run: |
-          cd out
-          C:\PROGRA~2\INNOSE~1\ISCC.exe DOSBox-Staging-setup.iss
+          $paths = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
+          $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed." }
+            $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "ISCC.exe was not found after installation." }
+          "ISCC_PATH=$iscc" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build Windows installer
+        shell: pwsh
+        working-directory: out
+        run: |
+          $script = Join-Path $PWD "DOSBox-Staging-setup.iss"
+          if (-not (Test-Path $script)) { throw "Missing installer definition: $script" }
+          & "$env:ISCC_PATH" $script
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Get-ChildItem -Path . -Filter "*-setup.exe" -File -Recurse | Select-Object -First 1
+          if (-not $installer) { throw "Inno Setup produced no setup executable." }
 
       - name: Download release notes HTML
         uses: actions/download-artifact@v8
@@ -351,7 +364,11 @@ jobs:
       - name: Prepare upload directory
         shell: pwsh
         run: |
-          move out\*-setup.exe .
+          $installer = Get-ChildItem -Path out -Filter "*-setup.exe" -File -Recurse | Select-Object -First 1
+          if (-not $installer) { throw "Installer executable was not found under out/." }
+          $destination = Join-Path $env:GITHUB_WORKSPACE "$env:PACKAGE_DIR-setup.exe"
+          Move-Item -LiteralPath $installer.FullName -Destination $destination -Force
+          if (-not (Test-Path $destination)) { throw "Failed to stage installer artifact." }
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v7
@@ -378,9 +395,9 @@ jobs:
       # the workflow as a whole also includes the debugger build above,
       # which can fail without this release build failing.
       - name: Report dev build status
-        if:   (success() || failure()) && github.ref == 'refs/heads/main'
+        if: (success() || failure()) && github.ref == 'refs/heads/main'
         uses: ./.github/actions/report-dev-build-status
         with:
-          platform:     windows
-          job_status:   ${{ job.status }}
+          platform: windows
+          job_status: ${{ job.status }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
